@@ -13,26 +13,27 @@
       box-sizing: border-box;
     }
 
-    .input-area {
-      text-align: center;
-      margin-bottom: 15px;
+    .input-area, .tag-area {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
     }
 
-    input {
-      padding: 8px;
-      width: 250px;
+    input, select {
+      padding: 6px;
     }
 
     button {
-      padding: 8px 12px;
-      margin-left: 5px;
+      padding: 6px 10px;
       cursor: pointer;
     }
 
     .board {
       display: flex;
       gap: 20px;
-      height: calc(100vh - 160px);
+      height: calc(100vh - 230px);
     }
 
     .column {
@@ -52,10 +53,6 @@
       outline: none;
     }
 
-    .column h2:focus {
-      background: #eef6ff;
-    }
-
     .dropzone {
       flex: 1;
       padding: 10px;
@@ -65,22 +62,39 @@
     .item {
       background: #e0e0e0;
       margin-bottom: 8px;
-      padding: 8px;
+      padding: 6px;
       border-radius: 4px;
       cursor: grab;
       user-select: none;
     }
 
-    /* 🗑️ Mülleimer */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .tag {
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      color: #fff;
+    }
+
+    .item-controls {
+      margin-top: 4px;
+    }
+
     .trash {
-      margin-top: 15px;
-      height: 60px;
+      margin-top: 12px;
+      height: 55px;
       border: 2px dashed #999;
       border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
+      font-size: 20px;
       color: #666;
       background: #fafafa;
     }
@@ -94,8 +108,16 @@
 </head>
 <body>
 
+<!-- TAG-VERWALTUNG -->
+<div class="tag-area">
+  <input id="tagName" placeholder="Neuer Tag (z. B. UI)" />
+  <input id="tagColor" type="color" value="#007acc" />
+  <button onclick="addGlobalTag()">Tag hinzufügen</button>
+</div>
+
+<!-- ITEM INPUT -->
 <div class="input-area">
-  <input id="itemInput" type="text" placeholder="Neues Item eingeben" />
+  <input id="itemInput" placeholder="Neues Item eingeben" />
   <button onclick="addItem()">Hinzufügen</button>
 </div>
 
@@ -116,62 +138,102 @@
   </div>
 </div>
 
-<div
-  id="trash"
-  class="trash"
-  ondragover="allowDrop(event)"
-  ondrop="deleteItem(event)"
->
+<div id="trash" class="trash" ondragover="allowDrop(event)" ondrop="deleteItem(event)">
   🗑️ Zum Löschen hierher ziehen
 </div>
 
 <script>
   let draggedItem = null;
-  const input = document.getElementById("itemInput");
-  const trash = document.getElementById("trash");
+  const tags = {}; // global tags: { UI: "#ff0000" }
 
-  // Enter = Item hinzufügen
-  input.addEventListener("keydown", (e) => {
+  document.getElementById("itemInput").addEventListener("keydown", e => {
     if (e.key === "Enter") addItem();
   });
 
+  function addGlobalTag() {
+    const name = document.getElementById("tagName").value.trim();
+    const color = document.getElementById("tagColor").value;
+    if (!name || tags[name]) return;
+
+    tags[name] = color;
+    document.getElementById("tagName").value = "";
+    updateAllTagSelectors();
+  }
+
+  function updateAllTagSelectors() {
+    document.querySelectorAll(".tag-select").forEach(select => {
+      const current = select.value;
+      select.innerHTML = `<option value="">+ Tag</option>`;
+      Object.keys(tags).forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        select.appendChild(opt);
+      });
+      select.value = current;
+    });
+  }
+
   function addItem() {
-    const text = input.value.trim();
+    const text = itemInput.value.trim();
     if (!text) return;
 
     const item = document.createElement("div");
     item.className = "item";
-    item.textContent = text;
     item.draggable = true;
-
     item.ondragstart = () => draggedItem = item;
     item.ondragend = () => trash.classList.remove("drag-over");
 
+    const label = document.createElement("div");
+    label.textContent = text;
+
+    const tagsDiv = document.createElement("div");
+    tagsDiv.className = "tags";
+
+    const select = document.createElement("select");
+    select.className = "tag-select";
+    select.onchange = () => {
+      if (!select.value) return;
+      addTagToItem(tagsDiv, select.value);
+      select.value = "";
+    };
+
+    item.appendChild(label);
+    item.appendChild(tagsDiv);
+    item.appendChild(select);
+
     document.getElementById("center").appendChild(item);
-    input.value = "";
+    itemInput.value = "";
+    updateAllTagSelectors();
   }
 
-  function allowDrop(event) {
-    event.preventDefault();
-    if (event.currentTarget === trash) {
-      trash.classList.add("drag-over");
-    }
+  function addTagToItem(container, tagName) {
+    if ([...container.children].some(t => t.textContent === tagName)) return;
+
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = tagName;
+    tag.style.background = tags[tagName];
+    container.appendChild(tag);
   }
 
-  function drop(event) {
-    event.preventDefault();
+  function allowDrop(e) {
+    e.preventDefault();
+    if (e.currentTarget.id === "trash") trash.classList.add("drag-over");
+  }
+
+  function drop(e) {
+    e.preventDefault();
     if (draggedItem) {
-      event.currentTarget.appendChild(draggedItem);
+      e.currentTarget.appendChild(draggedItem);
       draggedItem = null;
     }
   }
 
-  function deleteItem(event) {
-    event.preventDefault();
-    if (draggedItem) {
-      draggedItem.remove();
-      draggedItem = null;
-    }
+  function deleteItem(e) {
+    e.preventDefault();
+    if (draggedItem) draggedItem.remove();
+    draggedItem = null;
     trash.classList.remove("drag-over");
   }
 </script>
