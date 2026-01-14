@@ -27,7 +27,7 @@
       align-items: center;
     }
 
-    /* NEW: styled tag-area container so contents stay on one row and the button sits to the right */
+    /* NEW: styled tag-area container so contents stay on one row and the button sits on the right */
     .tag-area {
       gap: 12px;
       background: #fff;
@@ -68,7 +68,7 @@
       cursor: pointer;
     }
 
-    /* NEW: nicer +Tag button, fixed height, aligned right */
+    /* NEW: nicer global +Tag button */
     #addTagBtn {
       margin-left: 8px;
       background: linear-gradient(180deg, #4f46e5, #4338ca);
@@ -85,16 +85,9 @@
       height: 40px;
       transition: transform 120ms ease, box-shadow 120ms ease;
     }
-    #addTagBtn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 22px rgba(67,56,202,0.16);
-    }
-    #addTagBtn:active {
-      transform: translateY(0);
-    }
-    #addTagBtn:focus {
-      outline: 3px solid rgba(79,70,229,0.18);
-    }
+    #addTagBtn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(67,56,202,0.16); }
+    #addTagBtn:active { transform: translateY(0); }
+    #addTagBtn:focus { outline: 3px solid rgba(79,70,229,0.18); }
 
     .board {
       display: flex;
@@ -135,21 +128,91 @@
     .item {
       background: #e0e0e0;
       margin-bottom: 8px;
-      padding: 6px;
-      border-radius: 4px;
+      padding: 8px;
+      border-radius: 6px;
       cursor: grab;
       user-select: none;
+      position: relative; /* for per-item menu positioning */
     }
 
-    .item.dragging {
-      opacity: 0.6;
+    .item.dragging { opacity: 0.6; }
+
+    /* new item header layout */
+    .item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .item-label {
+      flex: 1;
+      min-width: 0;
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .item-add-tag-btn {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.08);
+      padding: 6px 10px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 34px;
+      color: #333;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(16,24,40,0.04);
+    }
+    .item-add-tag-btn:hover { transform: translateY(-1px); }
+    .item-add-tag-btn:active { transform: translateY(0); }
+
+    /* tag menu (popup) */
+    .tag-menu {
+      position: absolute;
+      top: 44px;
+      right: 10px;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(16,24,40,0.08);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 1200;
+      min-width: 180px;
+    }
+
+    .tag-menu .opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #fff;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+    }
+    .tag-menu .opt:hover {
+      background: #f7f7ff;
+    }
+    .tag-swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,0.06);
     }
 
     .tags {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 6px;
+      gap: 6px;
+      margin-top: 2px;
     }
 
     .tag {
@@ -161,9 +224,7 @@
       color: #fff;
     }
 
-    .tag .name {
-      margin-right: 6px;
-    }
+    .tag .name { margin-right: 6px; }
 
     .tag .remove {
       background: rgba(255,255,255,0.2);
@@ -249,6 +310,7 @@
       .tag-area { flex-wrap: wrap; }
       .tag-controls { width: 100%; }
       #addTagBtn { width: 100%; height: 44px; }
+      .tag-menu { right: 6px; left: 6px; top: auto; bottom: -6px; }
     }
   </style>
 </head>
@@ -261,9 +323,6 @@
     <div id="palette" class="tag-palette" aria-label="Farbauswahl"></div>
     <div class="tag-preview" id="tagPreview" aria-hidden="true">Vorschau</div>
   </div>
-
-  <!-- button sits to the right of the controls and doesn't cause vertical growth -->
-  <button id="addTagBtn">+ Tag hinzufügen</button>
 </div>
 
 <!-- existing tags display -->
@@ -367,7 +426,6 @@
 
   // ---------- Helpers ----------
   function getContrastColor(hex) {
-    // simple luminance check for white/black text
     const c = hex.replace('#','');
     const r = parseInt(c.substring(0,2),16);
     const g = parseInt(c.substring(2,4),16);
@@ -419,7 +477,6 @@
     const color = selectedColor;
     if (!name) return;
     if (tags[name]) {
-      // Name schon vorhanden — nichts tun (kurze visuelle Rückmeldung wäre möglich)
       nameEl.value = '';
       updatePreview();
       return;
@@ -427,14 +484,13 @@
     tags[name] = color;
     nameEl.value = '';
     updatePreview();
-    updateAllTagSelectors();
+    updateAllTagSelectors(); // keeps legacy selects in sync if any
     saveState();
   }
 
   function updateAllTagSelectors() {
     document.querySelectorAll('.tag-select').forEach(select => {
       const current = select.value;
-      // clear and add placeholder
       select.innerHTML = '';
       const placeholder = document.createElement('option');
       placeholder.value = '';
@@ -499,8 +555,32 @@
       item.classList.remove('dragging');
     });
 
+    // header: label + right aligned "+ Tag" button
+    const header = document.createElement('div');
+    header.className = 'item-header';
+
     const label = document.createElement('div');
+    label.className = 'item-label';
     label.textContent = itemObj.text;
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'item-add-tag-btn';
+    addBtn.type = 'button';
+    addBtn.title = 'Tag hinzufügen';
+    addBtn.textContent = '+ Tag';
+
+    // menu toggling
+    addBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      // close other open menus
+      document.querySelectorAll('.tag-menu').forEach(m => m.remove());
+      // create menu
+      const menu = buildTagMenu(itemObj.id);
+      item.appendChild(menu);
+    });
+
+    header.appendChild(label);
+    header.appendChild(addBtn);
 
     const tagsDiv = document.createElement('div');
     tagsDiv.className = 'tags';
@@ -508,25 +588,68 @@
     // render existing tags
     itemObj.tags.forEach(tn => renderTagElement(tagsDiv, tn, itemObj.id));
 
-    const select = document.createElement('select');
-    select.className = 'tag-select';
-    select.onchange = () => {
-      if (!select.value) return;
-      addTagToItemById(itemObj.id, select.value);
-      select.value = '';
-    };
-
-    item.appendChild(label);
+    item.appendChild(header);
     item.appendChild(tagsDiv);
-    item.appendChild(select);
 
-    updateAllTagSelectors();
+    // clicking outside closes menus
+    setTimeout(() => {
+      document.addEventListener('click', onDocClick);
+    }, 0);
 
     return item;
   }
 
+  function buildTagMenu(itemId) {
+    const menu = document.createElement('div');
+    menu.className = 'tag-menu';
+
+    // if no tags defined, show a hint
+    const keys = Object.keys(tags);
+    if (keys.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'small-muted';
+      hint.textContent = 'Keine Tags verfügbar. Erstelle zuerst einen Tag.';
+      menu.appendChild(hint);
+      return menu;
+    }
+
+    keys.forEach(name => {
+      const opt = document.createElement('button');
+      opt.className = 'opt';
+      opt.type = 'button';
+      // include swatch
+      const sw = document.createElement('span');
+      sw.className = 'tag-swatch';
+      sw.style.background = tags[name];
+      // label
+      const txt = document.createElement('span');
+      txt.textContent = name;
+      // disable option if already present on item
+      const it = items.find(x => x.id === itemId);
+      if (it && it.tags.includes(name)) {
+        opt.disabled = true;
+        opt.style.opacity = '0.6';
+      }
+      opt.appendChild(sw);
+      opt.appendChild(txt);
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addTagToItemById(itemId, name);
+        // close menu
+        menu.remove();
+      });
+      menu.appendChild(opt);
+    });
+
+    return menu;
+  }
+
+  function onDocClick(e) {
+    // remove all menus on outside click
+    document.querySelectorAll('.tag-menu').forEach(m => m.remove());
+  }
+
   function renderTagElement(container, tagName, itemId) {
-    // create tag element with remove button
     const tag = document.createElement('span');
     tag.className = 'tag';
     tag.style.background = tags[tagName] || '#666';
@@ -588,19 +711,14 @@
   function drop(e) {
     e.preventDefault();
     if (!draggedItem) return;
-    // if dropped on trash, don't handle here
     if (e.currentTarget.id === 'trash') return;
-    // append the item to the dropzone
     e.currentTarget.appendChild(draggedItem);
-
-    // update model: set columnId to the dropzone id
     const itemId = draggedItem.dataset.id;
     const it = items.find(x => x.id === itemId);
     if (it) {
       it.columnId = e.currentTarget.id || 'center';
       saveState();
     }
-
     draggedItem = null;
     trash.classList.remove('drag-over');
   }
@@ -609,9 +727,7 @@
     e.preventDefault();
     if (!draggedItem) return;
     const itemId = draggedItem.dataset.id;
-    // remove from DOM
     draggedItem.remove();
-    // remove from state
     items = items.filter(x => x.id !== itemId);
     saveState();
     draggedItem = null;
@@ -627,15 +743,12 @@
   }
 
   function renderAll() {
-    // clear existing items in dropzones
     clearAllDropzones();
     updateAllTagSelectors();
-    // set column titles from columns state
     document.querySelectorAll('.column h2').forEach(h => {
       const id = h.dataset.id;
       if (columns[id]) h.textContent = columns[id];
     });
-    // ensure every item gets a DOM element and placed in correct column
     items.forEach(it => {
       const el = createItemElement(it);
       const container = document.getElementById(it.columnId) || document.getElementById('center');
