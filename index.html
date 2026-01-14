@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <title>SideBySide</title>
   <style>
+    :root {
+      --gap: 8px;
+      --swatch-size: 26px;
+    }
+
     body {
       font-family: Arial, sans-serif;
       background: #f4f4f4;
@@ -16,9 +21,10 @@
     .input-area, .tag-area {
       display: flex;
       justify-content: center;
-      gap: 8px;
+      gap: var(--gap);
       margin-bottom: 10px;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     input, select {
@@ -33,7 +39,7 @@
     .board {
       display: flex;
       gap: 20px;
-      height: calc(100vh - 230px);
+      height: calc(100vh - 300px);
     }
 
     .column {
@@ -51,6 +57,13 @@
       margin: 5px 0;
       cursor: text;
       outline: none;
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+
+    .column h2:focus {
+      background: #f0f8ff;
+      border: 1px solid #cce6ff;
     }
 
     .dropzone {
@@ -68,22 +81,37 @@
       user-select: none;
     }
 
+    .item.dragging {
+      opacity: 0.6;
+    }
+
     .tags {
       display: flex;
       flex-wrap: wrap;
       gap: 4px;
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
     .tag {
+      display: inline-flex;
+      align-items: center;
       padding: 2px 6px;
       border-radius: 10px;
       font-size: 11px;
       color: #fff;
     }
 
-    .item-controls {
-      margin-top: 4px;
+    .tag .name {
+      margin-right: 6px;
+    }
+
+    .tag .remove {
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      padding: 0 6px;
+      cursor: pointer;
+      font-weight: bold;
+      line-height: 1;
     }
 
     .trash {
@@ -104,6 +132,62 @@
       border-color: #c00;
       color: #c00;
     }
+
+    /* Tag UI improvements */
+    .tag-area {
+      gap: 12px;
+    }
+
+    .tag-palette {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 4px;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #e6e6e6;
+    }
+
+    .swatch {
+      width: var(--swatch-size);
+      height: var(--swatch-size);
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      box-sizing: border-box;
+    }
+
+    .swatch.selected {
+      outline: 2px solid #333;
+      transform: translateY(-2px);
+    }
+
+    .tag-preview {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      margin-left: 6px;
+      min-width: 120px;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .tag-list {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 600px;
+    }
+
+    .small-muted {
+      font-size: 12px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -111,30 +195,37 @@
 <!-- TAG-VERWALTUNG -->
 <div class="tag-area">
   <input id="tagName" placeholder="Neuer Tag (z. B. UI)" />
-  <input id="tagColor" type="color" value="#007acc" />
-  <button onclick="addGlobalTag()">Tag hinzufügen</button>
+  <div id="palette" class="tag-palette" aria-label="Farbauswahl"></div>
+  <button id="addTagBtn">Tag hinzufügen</button>
+
+  <div class="tag-preview" id="tagPreview" aria-hidden="true">Vorschau</div>
+</div>
+
+<!-- existing tags display -->
+<div style="display:flex;justify-content:center;margin-bottom:8px">
+  <div class="tag-list" id="existingTags"></div>
 </div>
 
 <!-- ITEM INPUT -->
 <div class="input-area">
   <input id="itemInput" placeholder="Neues Item eingeben" />
-  <button onclick="addItem()">Hinzufügen</button>
+  <button id="addItemBtn">Hinzufügen</button>
 </div>
 
 <div class="board">
   <div class="column">
-    <h2 contenteditable="true">Kategorie A</h2>
-    <div class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+    <h2 data-id="left" contenteditable="true">Kategorie A</h2>
+    <div id="left" class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
   </div>
 
   <div class="column">
-    <h2 contenteditable="true">Alle Items</h2>
+    <h2 data-id="center" contenteditable="true">Alle Items</h2>
     <div id="center" class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
   </div>
 
   <div class="column">
-    <h2 contenteditable="true">Kategorie B</h2>
-    <div class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+    <h2 data-id="right" contenteditable="true">Kategorie B</h2>
+    <div id="right" class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
   </div>
 </div>
 
@@ -143,99 +234,354 @@
 </div>
 
 <script>
-  let draggedItem = null;
-  const tags = {}; // global tags: { UI: "#ff0000" }
+  // Speicher-Keys
+  const STORAGE_TAGS_KEY = 'sbs_tags_v1';
+  const STORAGE_ITEMS_KEY = 'sbs_items_v1';
+  const STORAGE_COLUMNS_KEY = 'sbs_columns_v1';
 
-  document.getElementById("itemInput").addEventListener("keydown", e => {
-    if (e.key === "Enter") addItem();
+  // Runtime state
+  let draggedItem = null;
+  let tags = {}; // { name: color }
+  let items = []; // [{ id, text, tags: [name], columnId }]
+  let columns = { left: 'Kategorie A', center: 'Alle Items', right: 'Kategorie B' };
+
+  const trash = document.getElementById('trash');
+
+  // Color palette (10 Farben)
+  const PALETTE = [
+    '#007acc', '#ff6b6b', '#6f42c1', '#f59e0b', '#10b981',
+    '#ef476f', '#ffd166', '#118ab2', '#8ac926', '#6a4c93'
+  ];
+  let selectedColor = PALETTE[0];
+
+  // Init: Events
+  document.getElementById('addTagBtn').addEventListener('click', addGlobalTag);
+  document.getElementById('addItemBtn').addEventListener('click', addItem);
+  document.getElementById('itemInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addItem();
+  });
+  document.getElementById('tagName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addGlobalTag();
   });
 
-  function addGlobalTag() {
-    const name = document.getElementById("tagName").value.trim();
-    const color = document.getElementById("tagColor").value;
-    if (!name || tags[name]) return;
+  // Build palette UI
+  const paletteEl = document.getElementById('palette');
+  const previewEl = document.getElementById('tagPreview');
+  function buildPalette() {
+    paletteEl.innerHTML = '';
+    PALETTE.forEach((c, idx) => {
+      const s = document.createElement('button');
+      s.className = 'swatch';
+      s.style.background = c;
+      s.setAttribute('aria-label', `Farbe ${c}`);
+      s.type = 'button';
+      if (c === selectedColor) s.classList.add('selected');
+      s.addEventListener('click', () => {
+        selectedColor = c;
+        document.querySelectorAll('.swatch').forEach(x => x.classList.remove('selected'));
+        s.classList.add('selected');
+        updatePreview();
+      });
+      paletteEl.appendChild(s);
+    });
+    updatePreview();
+  }
 
+  function updatePreview() {
+    const name = document.getElementById('tagName').value.trim() || 'Vorschau';
+    previewEl.textContent = name;
+    previewEl.style.background = selectedColor;
+    previewEl.style.color = getContrastColor(selectedColor);
+  }
+
+  document.getElementById('tagName').addEventListener('input', updatePreview);
+
+  // Load from localStorage and render
+  loadState();
+  buildPalette();
+
+  // ---------- Helpers ----------
+  function getContrastColor(hex) {
+    // simple luminance check for white/black text
+    const c = hex.replace('#','');
+    const r = parseInt(c.substring(0,2),16);
+    const g = parseInt(c.substring(2,4),16);
+    const b = parseInt(c.substring(4,6),16);
+    const luminance = (0.299*r + 0.587*g + 0.114*b)/255;
+    return luminance > 0.6 ? '#000' : '#fff';
+  }
+
+  // ---------- Persistence ----------
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_TAGS_KEY, JSON.stringify(tags));
+      localStorage.setItem(STORAGE_ITEMS_KEY, JSON.stringify(items));
+      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(columns));
+      renderExistingTags();
+    } catch (err) {
+      console.error('Speichern fehlgeschlagen', err);
+    }
+  }
+
+  function loadState() {
+    const t = localStorage.getItem(STORAGE_TAGS_KEY);
+    const its = localStorage.getItem(STORAGE_ITEMS_KEY);
+    const cols = localStorage.getItem(STORAGE_COLUMNS_KEY);
+    tags = t ? JSON.parse(t) : {};
+    items = its ? JSON.parse(its) : [];
+    columns = cols ? Object.assign(columns, JSON.parse(cols)) : columns;
+    renderAll();
+    // apply column titles into H2s
+    document.querySelectorAll('.column h2').forEach(h => {
+      const id = h.dataset.id;
+      if (columns[id]) h.textContent = columns[id];
+      // wire up change listener: save on input/blur
+      h.addEventListener('input', () => {
+        columns[id] = h.textContent.trim() || columns[id];
+        saveState();
+      });
+      h.addEventListener('blur', () => {
+        columns[id] = h.textContent.trim() || columns[id];
+        saveState();
+      });
+    });
+  }
+
+  // ---------- Tag-Management ----------
+  function addGlobalTag() {
+    const nameEl = document.getElementById('tagName');
+    const name = nameEl.value.trim();
+    const color = selectedColor;
+    if (!name) return;
+    if (tags[name]) {
+      // Name schon vorhanden — nichts tun (kurze visuelle Rückmeldung wäre möglich)
+      nameEl.value = '';
+      updatePreview();
+      return;
+    }
     tags[name] = color;
-    document.getElementById("tagName").value = "";
+    nameEl.value = '';
+    updatePreview();
     updateAllTagSelectors();
+    saveState();
   }
 
   function updateAllTagSelectors() {
-    document.querySelectorAll(".tag-select").forEach(select => {
+    document.querySelectorAll('.tag-select').forEach(select => {
       const current = select.value;
-      select.innerHTML = `<option value="">+ Tag</option>`;
+      // clear and add placeholder
+      select.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '+ Tag';
+      select.appendChild(placeholder);
       Object.keys(tags).forEach(t => {
-        const opt = document.createElement("option");
+        const opt = document.createElement('option');
         opt.value = t;
         opt.textContent = t;
         select.appendChild(opt);
       });
-      select.value = current;
+      select.value = current || '';
+    });
+    renderExistingTags();
+  }
+
+  function renderExistingTags() {
+    const c = document.getElementById('existingTags');
+    c.innerHTML = '';
+    Object.keys(tags).forEach(name => {
+      const el = document.createElement('div');
+      el.className = 'tag';
+      el.style.background = tags[name];
+      el.style.color = getContrastColor(tags[name]);
+      el.style.cursor = 'default';
+      el.style.padding = '4px 8px';
+      el.style.borderRadius = '10px';
+      el.textContent = name;
+      c.appendChild(el);
     });
   }
 
+  // ---------- Item-Management ----------
   function addItem() {
-    const text = itemInput.value.trim();
+    const input = document.getElementById('itemInput');
+    const text = input.value.trim();
     if (!text) return;
+    const id = 'i' + Date.now() + Math.floor(Math.random() * 1000);
+    const itemObj = { id, text, tags: [], columnId: 'center' };
+    items.push(itemObj);
+    saveState();
+    const el = createItemElement(itemObj);
+    document.getElementById('center').appendChild(el);
+    input.value = '';
+    updateAllTagSelectors();
+  }
 
-    const item = document.createElement("div");
-    item.className = "item";
+  function createItemElement(itemObj) {
+    const item = document.createElement('div');
+    item.className = 'item';
     item.draggable = true;
-    item.ondragstart = () => draggedItem = item;
-    item.ondragend = () => trash.classList.remove("drag-over");
+    item.dataset.id = itemObj.id;
 
-    const label = document.createElement("div");
-    label.textContent = text;
+    item.addEventListener('dragstart', (e) => {
+      draggedItem = item;
+      if (e.dataTransfer) e.dataTransfer.setData('text/plain', itemObj.id);
+      setTimeout(() => item.classList.add('dragging'), 0);
+    });
+    item.addEventListener('dragend', () => {
+      draggedItem = null;
+      trash.classList.remove('drag-over');
+      item.classList.remove('dragging');
+    });
 
-    const tagsDiv = document.createElement("div");
-    tagsDiv.className = "tags";
+    const label = document.createElement('div');
+    label.textContent = itemObj.text;
 
-    const select = document.createElement("select");
-    select.className = "tag-select";
+    const tagsDiv = document.createElement('div');
+    tagsDiv.className = 'tags';
+
+    // render existing tags
+    itemObj.tags.forEach(tn => renderTagElement(tagsDiv, tn, itemObj.id));
+
+    const select = document.createElement('select');
+    select.className = 'tag-select';
     select.onchange = () => {
       if (!select.value) return;
-      addTagToItem(tagsDiv, select.value);
-      select.value = "";
+      addTagToItemById(itemObj.id, select.value);
+      select.value = '';
     };
 
     item.appendChild(label);
     item.appendChild(tagsDiv);
     item.appendChild(select);
 
-    document.getElementById("center").appendChild(item);
-    itemInput.value = "";
     updateAllTagSelectors();
+
+    return item;
   }
 
-  function addTagToItem(container, tagName) {
-    if ([...container.children].some(t => t.textContent === tagName)) return;
+  function renderTagElement(container, tagName, itemId) {
+    // create tag element with remove button
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.style.background = tags[tagName] || '#666';
+    tag.style.color = getContrastColor(tag.style.background);
 
-    const tag = document.createElement("span");
-    tag.className = "tag";
-    tag.textContent = tagName;
-    tag.style.background = tags[tagName];
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    nameSpan.textContent = tagName;
+
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Tag entfernen';
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeTagFromItem(itemId, tagName);
+    });
+
+    tag.appendChild(nameSpan);
+    tag.appendChild(removeBtn);
     container.appendChild(tag);
   }
 
+  function addTagToItemById(itemId, tagName) {
+    const it = items.find(x => x.id === itemId);
+    if (!it) return;
+    if (it.tags.includes(tagName)) return;
+    it.tags.push(tagName);
+    saveState();
+    // update DOM
+    const itemEl = document.querySelector(`.item[data-id="${itemId}"]`);
+    if (itemEl) {
+      const tagsDiv = itemEl.querySelector('.tags');
+      renderTagElement(tagsDiv, tagName, itemId);
+    }
+  }
+
+  function removeTagFromItem(itemId, tagName) {
+    const it = items.find(x => x.id === itemId);
+    if (!it) return;
+    it.tags = it.tags.filter(t => t !== tagName);
+    saveState();
+    // update DOM
+    const itemEl = document.querySelector(`.item[data-id="${itemId}"]`);
+    if (itemEl) {
+      const tagsDiv = itemEl.querySelector('.tags');
+      tagsDiv.innerHTML = '';
+      it.tags.forEach(tn => renderTagElement(tagsDiv, tn, itemId));
+    }
+  }
+
+  // ---------- Drag & Drop ----------
   function allowDrop(e) {
     e.preventDefault();
-    if (e.currentTarget.id === "trash") trash.classList.add("drag-over");
+    const id = e.currentTarget.id;
+    if (id === 'trash') trash.classList.add('drag-over');
   }
 
   function drop(e) {
     e.preventDefault();
-    if (draggedItem) {
-      e.currentTarget.appendChild(draggedItem);
-      draggedItem = null;
+    if (!draggedItem) return;
+    // if dropped on trash, don't handle here
+    if (e.currentTarget.id === 'trash') return;
+    // append the item to the dropzone
+    e.currentTarget.appendChild(draggedItem);
+
+    // update model: set columnId to the dropzone id
+    const itemId = draggedItem.dataset.id;
+    const it = items.find(x => x.id === itemId);
+    if (it) {
+      it.columnId = e.currentTarget.id || 'center';
+      saveState();
     }
+
+    draggedItem = null;
+    trash.classList.remove('drag-over');
   }
 
   function deleteItem(e) {
     e.preventDefault();
-    if (draggedItem) draggedItem.remove();
+    if (!draggedItem) return;
+    const itemId = draggedItem.dataset.id;
+    // remove from DOM
+    draggedItem.remove();
+    // remove from state
+    items = items.filter(x => x.id !== itemId);
+    saveState();
     draggedItem = null;
-    trash.classList.remove("drag-over");
+    trash.classList.remove('drag-over');
   }
+
+  // ---------- Rendering ----------
+  function clearAllDropzones() {
+    ['left','center','right'].forEach(id => {
+      const dz = document.getElementById(id);
+      if (dz) dz.innerHTML = '';
+    });
+  }
+
+  function renderAll() {
+    // clear existing items in dropzones
+    clearAllDropzones();
+    updateAllTagSelectors();
+    // set column titles from columns state
+    document.querySelectorAll('.column h2').forEach(h => {
+      const id = h.dataset.id;
+      if (columns[id]) h.textContent = columns[id];
+    });
+    // ensure every item gets a DOM element and placed in correct column
+    items.forEach(it => {
+      const el = createItemElement(it);
+      const container = document.getElementById(it.columnId) || document.getElementById('center');
+      container.appendChild(el);
+    });
+    renderExistingTags();
+  }
+
+  // expose helper to clear storage during dev (not linked in UI)
+  // window._sbs_clearStorage = function(){ localStorage.removeItem(STORAGE_TAGS_KEY); localStorage.removeItem(STORAGE_ITEMS_KEY); localStorage.removeItem(STORAGE_COLUMNS_KEY); tags = {}; items = []; columns = { left: 'Kategorie A', center: 'Alle Items', right: 'Kategorie B' }; renderAll(); };
+
 </script>
 
 </body>
