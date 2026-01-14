@@ -2,17 +2,13 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Item-Zuordnung (2 Kategorien)</title>
+  <title>Item-Zuordnung</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f4f4f4;
       margin: 0;
       padding: 20px;
-    }
-
-    h1 {
-      text-align: center;
     }
 
     .input-area {
@@ -35,7 +31,7 @@
       display: flex;
       justify-content: space-between;
       gap: 20px;
-      height: 70vh;
+      height: 75vh;
     }
 
     .column {
@@ -68,15 +64,28 @@
     .item {
       background: #e0e0e0;
       margin-bottom: 8px;
-      padding: 8px;
+      padding: 8px 28px 8px 8px;
       border-radius: 4px;
       cursor: grab;
+      position: relative;
+      user-select: none;
+    }
+
+    .delete-btn {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      cursor: pointer;
+      color: #666;
+      font-weight: bold;
+    }
+
+    .delete-btn:hover {
+      color: #c00;
     }
   </style>
 </head>
 <body>
-
-<h1>Items zuordnen</h1>
 
 <div class="input-area">
   <input
@@ -111,7 +120,6 @@
 
 <script>
   let draggedItem = null;
-
   const input = document.getElementById("itemInput");
 
   // Enter-Taste zum Hinzufügen
@@ -127,10 +135,20 @@
 
     const item = document.createElement("div");
     item.className = "item";
-    item.textContent = text;
     item.draggable = true;
 
     item.ondragstart = () => draggedItem = item;
+
+    const label = document.createElement("span");
+    label.textContent = text;
+
+    const del = document.createElement("span");
+    del.className = "delete-btn";
+    del.textContent = "✕";
+    del.onclick = () => item.remove();
+
+    item.appendChild(label);
+    item.appendChild(del);
 
     document.getElementById("center").appendChild(item);
     input.value = "";
