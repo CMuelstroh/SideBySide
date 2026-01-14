@@ -27,13 +27,73 @@
       align-items: center;
     }
 
+    /* NEW: styled tag-area container so contents stay on one row and the button sits to the right */
+    .tag-area {
+      gap: 12px;
+      background: #fff;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid #ececec;
+      box-shadow: 0 1px 2px rgba(16,24,40,0.03);
+      max-width: 900px;
+      margin: 0 auto 10px;
+      align-items: center;
+    }
+
+    .tag-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex: 1;            /* takes available horizontal space so button stays right */
+      min-width: 0;       /* allow children to shrink */
+    }
+
     input, select {
       padding: 6px;
+    }
+
+    /* nicer input styling and prevent overflow that would cause vertical growth */
+    #tagName {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+      box-sizing: border-box;
     }
 
     button {
       padding: 6px 10px;
       cursor: pointer;
+    }
+
+    /* NEW: nicer +Tag button, fixed height, aligned right */
+    #addTagBtn {
+      margin-left: 8px;
+      background: linear-gradient(180deg, #4f46e5, #4338ca);
+      color: #fff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(67,56,202,0.12), inset 0 -1px 0 rgba(0,0,0,0.06);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      height: 40px;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    #addTagBtn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 22px rgba(67,56,202,0.16);
+    }
+    #addTagBtn:active {
+      transform: translateY(0);
+    }
+    #addTagBtn:focus {
+      outline: 3px solid rgba(79,70,229,0.18);
     }
 
     .board {
@@ -133,11 +193,6 @@
       color: #c00;
     }
 
-    /* Tag UI improvements */
-    .tag-area {
-      gap: 12px;
-    }
-
     .tag-palette {
       display: flex;
       gap: 6px;
@@ -188,17 +243,27 @@
       font-size: 12px;
       color: #666;
     }
+
+    /* Responsive: make the tag controls wrap under the button on very small screens */
+    @media (max-width: 520px) {
+      .tag-area { flex-wrap: wrap; }
+      .tag-controls { width: 100%; }
+      #addTagBtn { width: 100%; height: 44px; }
+    }
   </style>
 </head>
 <body>
 
 <!-- TAG-VERWALTUNG -->
 <div class="tag-area">
-  <input id="tagName" placeholder="Neuer Tag (z. B. UI)" />
-  <div id="palette" class="tag-palette" aria-label="Farbauswahl"></div>
-  <button id="addTagBtn">Tag hinzufügen</button>
+  <div class="tag-controls">
+    <input id="tagName" placeholder="Neuer Tag (z. B. UI)" />
+    <div id="palette" class="tag-palette" aria-label="Farbauswahl"></div>
+    <div class="tag-preview" id="tagPreview" aria-hidden="true">Vorschau</div>
+  </div>
 
-  <div class="tag-preview" id="tagPreview" aria-hidden="true">Vorschau</div>
+  <!-- button sits to the right of the controls and doesn't cause vertical growth -->
+  <button id="addTagBtn">+ Tag hinzufügen</button>
 </div>
 
 <!-- existing tags display -->
