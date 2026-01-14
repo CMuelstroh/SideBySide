@@ -2,18 +2,20 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Item-Zuordnung</title>
+  <title>SideBySide</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f4f4f4;
       margin: 0;
       padding: 20px;
+      height: 100vh;
+      box-sizing: border-box;
     }
 
     .input-area {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
 
     input {
@@ -29,9 +31,8 @@
 
     .board {
       display: flex;
-      justify-content: space-between;
       gap: 20px;
-      height: 75vh;
+      height: calc(100vh - 160px);
     }
 
     .column {
@@ -64,23 +65,29 @@
     .item {
       background: #e0e0e0;
       margin-bottom: 8px;
-      padding: 8px 28px 8px 8px;
+      padding: 8px;
       border-radius: 4px;
       cursor: grab;
-      position: relative;
       user-select: none;
     }
 
-    .delete-btn {
-      position: absolute;
-      top: 4px;
-      right: 6px;
-      cursor: pointer;
+    /* 🗑️ Mülleimer */
+    .trash {
+      margin-top: 15px;
+      height: 60px;
+      border: 2px dashed #999;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
       color: #666;
-      font-weight: bold;
+      background: #fafafa;
     }
 
-    .delete-btn:hover {
+    .trash.drag-over {
+      background: #ffecec;
+      border-color: #c00;
       color: #c00;
     }
   </style>
@@ -88,11 +95,7 @@
 <body>
 
 <div class="input-area">
-  <input
-    id="itemInput"
-    type="text"
-    placeholder="Neues Item eingeben"
-  />
+  <input id="itemInput" type="text" placeholder="Neues Item eingeben" />
   <button onclick="addItem()">Hinzufügen</button>
 </div>
 
@@ -104,12 +107,7 @@
 
   <div class="column">
     <h2 contenteditable="true">Alle Items</h2>
-    <div
-      id="center"
-      class="dropzone"
-      ondragover="allowDrop(event)"
-      ondrop="drop(event)"
-    ></div>
+    <div id="center" class="dropzone" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
   </div>
 
   <div class="column">
@@ -118,15 +116,23 @@
   </div>
 </div>
 
+<div
+  id="trash"
+  class="trash"
+  ondragover="allowDrop(event)"
+  ondrop="deleteItem(event)"
+>
+  🗑️ Zum Löschen hierher ziehen
+</div>
+
 <script>
   let draggedItem = null;
   const input = document.getElementById("itemInput");
+  const trash = document.getElementById("trash");
 
-  // Enter-Taste zum Hinzufügen
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      addItem();
-    }
+  // Enter = Item hinzufügen
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addItem();
   });
 
   function addItem() {
@@ -135,20 +141,11 @@
 
     const item = document.createElement("div");
     item.className = "item";
+    item.textContent = text;
     item.draggable = true;
 
     item.ondragstart = () => draggedItem = item;
-
-    const label = document.createElement("span");
-    label.textContent = text;
-
-    const del = document.createElement("span");
-    del.className = "delete-btn";
-    del.textContent = "✕";
-    del.onclick = () => item.remove();
-
-    item.appendChild(label);
-    item.appendChild(del);
+    item.ondragend = () => trash.classList.remove("drag-over");
 
     document.getElementById("center").appendChild(item);
     input.value = "";
@@ -156,6 +153,9 @@
 
   function allowDrop(event) {
     event.preventDefault();
+    if (event.currentTarget === trash) {
+      trash.classList.add("drag-over");
+    }
   }
 
   function drop(event) {
@@ -164,6 +164,15 @@
       event.currentTarget.appendChild(draggedItem);
       draggedItem = null;
     }
+  }
+
+  function deleteItem(event) {
+    event.preventDefault();
+    if (draggedItem) {
+      draggedItem.remove();
+      draggedItem = null;
+    }
+    trash.classList.remove("drag-over");
   }
 </script>
 
